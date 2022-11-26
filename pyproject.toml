@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "ethomap"
+version = "0.1.0"
+description = "Generate behavioral embeddings of postural time series."
+authors = ["Duncan Mearns"]
+license = "AGPL-3.0"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+numpy = "^1.23"
+scikit-learn = "^1.1.3"
+scipy = "^1.9.3"
+joblib = "^1.2.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
