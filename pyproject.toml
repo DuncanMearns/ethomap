@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ethomap"
-version = "0.1.2"
+version = "0.2.0"
 description = "Generate behavioral embeddings of postural time series."
 authors = ["Duncan Mearns"]
 license = "AGPL-3.0"

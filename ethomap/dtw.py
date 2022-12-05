@@ -1,5 +1,37 @@
 import numpy as np
-from scipy.spatial.distance import cdist
+from numba import njit
+from sklearn.metrics import pairwise_distances
+
+
+@njit
+def fast_dtw(cost, bw):
+    n, m = cost.shape  # get shape
+    # Create DTW matrix and fill first row with initial cost
+    dtw = np.zeros_like(cost)
+    dtw.fill(np.inf)
+    dtw[0, :bw] = cost[0, 0:bw]
+    # Main loop of dtw algorithm
+    for i in range(1, n):
+        for j in range(max(0, i - bw + 1), min(m, i + bw)):
+            dtw[i, j] = cost[i, j] + min(dtw[i - 1, j], dtw[i, j - 1], dtw[i - 1, j - 1])
+    return dtw
+
+
+@njit
+def fast_dtw_1d(s, t, bw):
+    """Calculate the DTW distance matrix for two equal length 1-dimensional time series."""
+    # Initialise distance matrix
+    n = len(s)
+    m = len(t)
+    dtw = np.empty((n, m))
+    dtw.fill(np.inf)
+    # Fill the first row without a cost allowing optimal path to be found starting anywhere within the bandwidth
+    dtw[0, :bw] = np.array([np.abs(s[0] - t[j]) for j in range(0, bw)])
+    # Main loop of dtw algorithm
+    for i in range(1, n):
+        for j in range(max(0, i - bw + 1), min(m, i + bw)):
+            dtw[i, j] = np.abs(s[i] - t[j]) + min(dtw[i - 1, j], dtw[i, j - 1], dtw[i - 1, j - 1])
+    return dtw
 
 
 class DynamicTimeWarping:
@@ -13,6 +45,8 @@ class DynamicTimeWarping:
         Bandwidth of the Sakoe-Chiba band (in seconds).
     fs : float
         Sampling frequency of the time series (samples per second).
+    metric : str
+        Metric for calculating initial cost matrix. Default = "euclidean".
 
     Attributes
     ----------
@@ -26,13 +60,14 @@ class DynamicTimeWarping:
         Dynamic time warping distance matrix.
     """
 
-    def __init__(self, s0: np.ndarray = None, bw: float = 0.01, fs: float = 500.):
+    def __init__(self, s0: np.ndarray = None, bw: float = 0.01, fs: float = 500., metric="euclidean"):
         if s0 is not None:
             self.s0 = np.array(s0)
         else:
             self.s0 = None
         self.bw = bw
         self.fs = fs
+        self.metric = metric
 
     @property
     def ndims(self):
@@ -71,21 +106,21 @@ class DynamicTimeWarping:
         # Calculate bandwidth in frames
         bw = int(self.bw * self.fs)
         if self.ndims == 1:
-            # Create zero-padded arrays, t0 and t1, to align
+            # Create zero-padded arrays, s and t, to align
             self.s0 = self.s0.squeeze()
             self.s1 = self.s1.squeeze()
             self.t0, self.t1 = np.zeros(self.n), np.zeros(self.n)
             self.t0[:len(self.s0)] = self.s0
             self.t1[:len(self.s1)] = self.s1
             # Calculate distance matrix
-            self.DTW = self._distance_matrix_1d(self.t0, self.t1, bw)
+            self.DTW = self.dtw_1d(self.t0, self.t1, bw)
         else:
-            # Create zero-padded arrays, t0 and t1, to align
+            # Create zero-padded arrays, s and t, to align
             self.t0, self.t1 = np.zeros((self.n, self.ndims)), np.zeros((self.n, self.ndims))
             self.t0[:len(self.s0)] = self.s0
             self.t1[:len(self.s1)] = self.s1
             # Calculate distance matrix
-            self.DTW = self._distance_matrix(self.t0, self.t1, bw)
+            self.DTW = self.dtw(self.t0, self.t1, bw, metric=self.metric)
         # Get the alignment distance
         distance = self.DTW[-1, -1]
         return distance
@@ -120,36 +155,15 @@ class DynamicTimeWarping:
         return np.array([self.align(s) for s in series])
 
     @staticmethod
-    def _distance_matrix(t0, t1, bw):
+    def dtw(s, t, bw, metric="euclidean"):
         """Calculate the DTW distance matrix for two equal length n-dimensional time series."""
-        # Initialise distance matrix
-        n = len(t0)
-        D = np.empty((n, n))
-        D.fill(np.inf)
-        # Calculate pairwise distances between points on the trajectories
-        pairwise_distances = cdist(t0, t1)
-        # Fill the first row without a cost allowing optimal path to be found starting anywhere within the bandwidth
-        D[0, :bw] = pairwise_distances[0, 0:bw]
-        # Main loop of dtw algorithm
-        for i in range(1, n):
-            for j in range(max(0, i - bw + 1), min(n, i + bw)):
-                D[i, j] = pairwise_distances[i, j] + min(D[i - 1, j], D[i, j - 1], D[i - 1, j - 1])
-        return D
+        cost = pairwise_distances(s, t, metric=metric)
+        return fast_dtw(cost, bw)
 
     @staticmethod
-    def _distance_matrix_1d(t0, t1, bw):
+    def dtw_1d(s, t, bw):
         """Calculate the DTW distance matrix for two equal length 1-dimensional time series."""
-        # Initialise distance matrix
-        n = len(t0)
-        D = np.empty((n, n))
-        D.fill(np.inf)
-        # Fill the first row without a cost allowing optimal path to be found starting anywhere within the bandwidth
-        D[0, :bw] = np.array([np.abs(t0[0] - t1[j]) for j in range(0, bw)])
-        # Main loop of dtw algorithm
-        for i in range(1, n):
-            for j in range(max(0, i - bw + 1), min(n, i + bw)):
-                D[i, j] = np.abs(t0[i] - t1[j]) + min(D[i - 1, j], D[i, j - 1], D[i - 1, j - 1])
-        return D
+        return fast_dtw_1d(s, t, bw)
 
 
 if __name__ == "__main__":
@@ -171,5 +185,5 @@ if __name__ == "__main__":
     # for i in range(2):
     #     axes[i].plot(template[:, i])
     #     axes[i].plot(s1[:, i])
-    #     axes[i].plot(t0, t1[:, i])
+    #     axes[i].plot(s, t[:, i])
     # plt.show()

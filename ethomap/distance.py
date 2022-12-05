@@ -51,7 +51,7 @@ def pairwise_dtw(series: typing.Iterable[np.ndarray], parallel_processing: bool 
         If True, compute each row of the distance matrix in parallel.
     n_processors : int, default -1
         Number of processors to use if parallel_processing is True. Default (-1) uses all available processors.
-    kwargs : dict
+    kwargs
         Passed to multi_dtw.
 
     Returns
@@ -87,7 +87,7 @@ def dist_to_templates(templates: typing.Iterable[np.ndarray], series: typing.Ite
         If True, compute each row of the distance matrix in parallel.
     n_processors : int, default -1
         Number of processors to use if parallel_processing is True. Default (-1) uses all available processors.
-    kwargs : dict
+    kwargs
         Passed to multi_dtw.
 
     Returns
