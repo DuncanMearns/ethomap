@@ -5,9 +5,9 @@ from joblib import Parallel, delayed
 from .dtw import DynamicTimeWarping
 
 
-def multi_dtw(template: np.ndarray, *series: np.ndarray,
-              bw: float = 0.01, fs: float = 500., include_flip: bool = False) -> np.ndarray:
-    """Compute the dtw distances between multiple time series and a template, s0.
+def distances_to_template(template: np.ndarray, *series: np.ndarray,
+                          bw: float = 0.01, fs: float = 500., include_flip: bool = False, **kwargs) -> np.ndarray:
+    """Compute the dtw distances between multiple time series and a template, x.
 
     Parameters
     ----------
@@ -20,7 +20,7 @@ def multi_dtw(template: np.ndarray, *series: np.ndarray,
     fs : float
         Sampling frequency of the time series (samples per second).
     include_flip : bool, default False
-        If True, takes minimum of [distance(s0, s1), distance(-s0, s1)].
+        If True, takes minimum of [distance(x, y), distance(-x, y)].
 
     Returns
     -------
@@ -35,12 +35,12 @@ def multi_dtw(template: np.ndarray, *series: np.ndarray,
     distances = dtw.map_to_template(*series)
     if not include_flip:
         return distances
-    dtw_flipped = DynamicTimeWarping(-template, bw, fs)
+    dtw_flipped = DynamicTimeWarping(-template, bw, fs, **kwargs)
     distances_flipped = dtw_flipped.map_to_template(*series)
     return np.min([distances, distances_flipped], axis=0)
 
 
-def pairwise_dtw(series: typing.Iterable[np.ndarray], parallel_processing: bool = True, n_processors: int = -1, **kwargs):
+def pdist_dtw(series: typing.Iterable[np.ndarray], parallel_processing: bool = True, n_processors: int = -1, **kwargs):
     """Compute the pairwise dtw distances between series.
 
     Parameters
@@ -66,15 +66,15 @@ def pairwise_dtw(series: typing.Iterable[np.ndarray], parallel_processing: bool 
     series = list(series)
     series_by_row = [series[i:] for i in range(len(series) - 1)]
     if parallel_processing:
-        distances = Parallel(n_processors)(delayed(multi_dtw)(*row, **kwargs) for row in series_by_row)
+        distances = Parallel(n_processors)(delayed(distances_to_template)(*row, **kwargs) for row in series_by_row)
     else:
-        distances = [multi_dtw(*row, **kwargs) for row in series_by_row]
+        distances = [distances_to_template(*row, **kwargs) for row in series_by_row]
     D = np.array([d for row in distances for d in row])
     return D
 
 
-def dist_to_templates(templates: typing.Iterable[np.ndarray], series: typing.Iterable[np.ndarray],
-                      parallel_processing: bool = True, n_processors: int = -1, **kwargs):
+def cdist_dtw(templates: typing.Iterable[np.ndarray], series: typing.Iterable[np.ndarray],
+              parallel_processing: bool = True, n_processors: int = -1, **kwargs):
     """Compute the dtw distances between a set of templates and series.
 
     Parameters
@@ -93,7 +93,7 @@ def dist_to_templates(templates: typing.Iterable[np.ndarray], series: typing.Ite
     Returns
     -------
     D : np.ndarray
-        DTW distance between each series and template. D[i, j] contains distance between series[i] and template[j].
+        dtw_ distance between each series and template. D[i, j] contains distance between series[i] and template[j].
 
     See Also
     --------
@@ -103,8 +103,8 @@ def dist_to_templates(templates: typing.Iterable[np.ndarray], series: typing.Ite
     templates = list(templates)
     series_by_row = [[s] + templates for s in series]
     if parallel_processing:
-        distances = Parallel(n_processors)(delayed(multi_dtw)(*row, **kwargs) for row in series_by_row)
+        distances = Parallel(n_processors)(delayed(distances_to_template)(*row, **kwargs) for row in series_by_row)
     else:
-        distances = [multi_dtw(*row, **kwargs) for row in series_by_row]
+        distances = [distances_to_template(*row, **kwargs) for row in series_by_row]
     D = np.array(distances)
     return D
